@@ -2,266 +2,467 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Virtual Point Finder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Real World Virtual Point Compass</title>
   <style>
     body {
       font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px;
-      max-width: 500px;
-      margin: 0 auto;
-    }
-    
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(10, 30px);
-      grid-template-rows: repeat(10, 30px);
-      gap: 1px;
-      margin: 20px 0;
-      border: 1px solid #ccc;
-      background-color: #f0f0f0;
-    }
-    
-    .cell {
-      width: 30px;
-      height: 30px;
-      display: flex;
-      align-items: center;
       justify-content: center;
-      background-color: #f9f9f9;
-      font-size: 20px;
-    }
-    
-    .user {
-      background-color: #b3d9ff;
-    }
-    
-    .point {
-      background-color: #ffe066;
-    }
-    
-    .both {
-      background-color: #d9b3ff;
-    }
-    
-    .compass {
-      font-size: 18px;
-      font-weight: bold;
-      margin: 10px 0;
+      height: 100vh;
+      background-color: #f5f5f5;
+      overflow: hidden;
       text-align: center;
     }
     
-    .controls {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 5px;
-      width: 120px;
-      margin-top: 20px;
-    }
-    
-    .btn {
-      width: 40px;
-      height: 40px;
-      font-size: 20px;
+    .container {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      background-color: #e0e0e0;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      cursor: pointer;
+      width: 100%;
+      max-width: 600px;
+      padding: 20px;
+      box-sizing: border-box;
     }
     
-    .legend {
-      display: flex;
-      gap: 20px;
-      margin-top: 10px;
+    h1 {
+      margin-bottom: 10px;
+    }
+    
+    .status {
+      margin-bottom: 20px;
+      color: #666;
       font-size: 14px;
     }
     
-    .found {
-      animation: pulse 1s infinite;
+    .compass-container {
+      position: relative;
+      width: 250px;
+      height: 250px;
+      margin: 20px auto;
     }
     
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-      100% { transform: scale(1); }
+    .compass-base {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background-color: #f0f0f0;
+      border: 3px solid #ddd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .compass-directions {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    
+    .compass-direction {
+      position: absolute;
+      width: 100%;
+      text-align: center;
+      font-weight: bold;
+      font-size: 18px;
+      color: #555;
+    }
+    
+    .north { top: 10px; }
+    .east { right: 10px; top: 50%; transform: translateY(-50%); }
+    .south { bottom: 10px; }
+    .west { left: 10px; top: 50%; transform: translateY(-50%); }
+    
+    .compass-needle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 100px;
+      margin-left: -4px;
+      margin-top: -100px;
+      background: linear-gradient(to bottom, #ff4d4d 0%, #ff4d4d 50%, #4d4dff 50%, #4d4dff 100%);
+      transform-origin: bottom center;
+      transition: transform 0.1s ease-out;
+    }
+    
+    .pointer {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 110px;
+      margin-left: -4px;
+      margin-top: -110px;
+      background-color: #2196f3;
+      transform-origin: bottom center;
+      transition: transform 0.1s ease-out;
+      z-index: 10;
+    }
+    
+    .pointer:after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -6px;
+      width: 0;
+      height: 0;
+      border-left: 10px solid transparent;
+      border-right: 10px solid transparent;
+      border-bottom: 16px solid #2196f3;
+      transform: translateY(-14px);
+    }
+    
+    .center-dot {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 20px;
+      height: 20px;
+      margin-left: -10px;
+      margin-top: -10px;
+      background-color: #666;
+      border-radius: 50%;
+      z-index: 20;
+    }
+    
+    .distance {
+      margin-top: 20px;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
+      width: 100%;
+    }
+    
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #2196f3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background-color: #0b7dda;
+    }
+    
+    button:active {
+      background-color: #0a6bba;
+    }
+    
+    .debug {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f0f0f0;
+      border-radius: 4px;
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 12px;
+      color: #666;
+      text-align: left;
+      height: 100px;
+      overflow: auto;
+    }
+    
+    @media (max-width: 480px) {
+      .compass-container {
+        width: 220px;
+        height: 220px;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Virtual Point Finder</h1>
-  <p>Use arrow keys or buttons to find the virtual point</p>
-  
-  <div class="compass" id="compass">Start moving!</div>
-  
-  <div class="grid" id="grid"></div>
-  
-  <div class="legend">
-    <div>⬤ = You</div>
-    <div>✦ = Virtual point</div>
-  </div>
-  
-  <div class="controls">
-    <div></div>
-    <button class="btn" onclick="move('up')">▲</button>
-    <div></div>
+  <div class="container">
+    <h1>Virtual Point Finder</h1>
+    <div class="status" id="status">Loading...</div>
     
-    <button class="btn" onclick="move('left')">◄</button>
-    <div></div>
-    <button class="btn" onclick="move('right')">►</button>
+    <div class="compass-container">
+      <div class="compass-base"></div>
+      <div class="compass-directions">
+        <div class="compass-direction north">N</div>
+        <div class="compass-direction east">E</div>
+        <div class="compass-direction south">S</div>
+        <div class="compass-direction west">W</div>
+      </div>
+      <div class="compass-needle" id="compass-needle"></div>
+      <div class="pointer" id="pointer"></div>
+      <div class="center-dot"></div>
+    </div>
     
-    <div></div>
-    <button class="btn" onclick="move('down')">▼</button>
-    <div></div>
+    <div class="distance" id="distance">--</div>
+    
+    <div class="controls">
+      <button id="start-btn">Start Experience</button>
+      <button id="new-point-btn">Create New Virtual Point</button>
+    </div>
+    
+    <div class="debug" id="debug"></div>
   </div>
 
   <script>
-    // Grid size for our virtual space
-    const GRID_SIZE = 10;
+    // DOM Elements
+    const statusEl = document.getElementById('status');
+    const compassNeedle = document.getElementById('compass-needle');
+    const pointer = document.getElementById('pointer');
+    const distanceEl = document.getElementById('distance');
+    const startBtn = document.getElementById('start-btn');
+    const newPointBtn = document.getElementById('new-point-btn');
+    const debugEl = document.getElementById('debug');
     
-    // User and point positions
-    let userPosition = { x: 5, y: 5 };
-    let pointPosition = { x: 8, y: 3 };
-    let pointMovementInterval;
+    // State variables
+    let userPosition = null;
+    let virtualPoint = null;
+    let watchId = null;
+    let deviceOrientation = 0;
+    let pointingAngle = 0;
+    let distance = 0;
+    let isTracking = false;
     
-    // DOM elements
-    const gridElement = document.getElementById('grid');
-    const compassElement = document.getElementById('compass');
-    
-    // Initialize the grid
-    function initGrid() {
-      // Clear existing grid
-      gridElement.innerHTML = '';
-      
-      // Create new grid
-      for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-          const cell = document.createElement('div');
-          cell.id = `cell-${x}-${y}`;
-          cell.className = 'cell';
-          
-          // Add content based on positions
-          if (x === userPosition.x && y === userPosition.y && 
-              x === pointPosition.x && y === pointPosition.y) {
-            cell.innerHTML = '★';
-            cell.classList.add('both');
-            cell.classList.add('found');
-          } else if (x === userPosition.x && y === userPosition.y) {
-            cell.innerHTML = '⬤';
-            cell.classList.add('user');
-          } else if (x === pointPosition.x && y === pointPosition.y) {
-            cell.innerHTML = '✦';
-            cell.classList.add('point');
-          } else {
-            cell.innerHTML = '·';
-          }
-          
-          gridElement.appendChild(cell);
-        }
-      }
+    // Debug function
+    function log(message) {
+      debugEl.innerHTML = message + '<br>' + debugEl.innerHTML;
     }
     
-    // Update the compass direction
-    function updateCompass() {
-      // Calculate direction from user to point
-      const dx = pointPosition.x - userPosition.x;
-      const dy = pointPosition.y - userPosition.y;
-      
-      // Determine primary direction (N, S, E, W)
-      let direction = '';
-      
-      if (dx === 0 && dy === 0) {
-        direction = 'You found it!';
-        compassElement.style.color = '#9c27b0';
-      } else {
-        compassElement.style.color = '#2196f3';
-        
-        if (Math.abs(dy) > Math.abs(dx)) {
-          // Vertical movement is stronger
-          direction = dy < 0 ? 'North' : 'South';
-          if (Math.abs(dx) > 0.3 * Math.abs(dy)) {
-            // Add secondary direction
-            direction += dx < 0 ? 'west' : 'east';
-          }
-        } else {
-          // Horizontal movement is stronger
-          direction = dx < 0 ? 'West' : 'East';
-          if (Math.abs(dy) > 0.3 * Math.abs(dx)) {
-            // Add secondary direction
-            direction = (dy < 0 ? 'North' : 'South') + direction.toLowerCase();
-          }
-        }
-      }
-      
-      compassElement.textContent = direction;
-    }
-    
-    // Move the user based on arrow keys or button clicks
-    function move(direction) {
-      switch(direction) {
-        case 'up':
-          userPosition.y = Math.max(0, userPosition.y - 1);
-          break;
-        case 'down':
-          userPosition.y = Math.min(GRID_SIZE - 1, userPosition.y + 1);
-          break;
-        case 'left':
-          userPosition.x = Math.max(0, userPosition.x - 1);
-          break;
-        case 'right':
-          userPosition.x = Math.min(GRID_SIZE - 1, userPosition.x + 1);
-          break;
-      }
-      
-      // Update the grid and compass
-      initGrid();
-      updateCompass();
-    }
-    
-    // Handle keyboard arrow keys
-    document.addEventListener('keydown', (e) => {
-      switch(e.key) {
-        case 'ArrowUp':
-          move('up');
-          break;
-        case 'ArrowDown':
-          move('down');
-          break;
-        case 'ArrowLeft':
-          move('left');
-          break;
-        case 'ArrowRight':
-          move('right');
-          break;
-      }
-    });
-    
-    // Randomly move the virtual point every few seconds
-    function startPointMovement() {
-      pointMovementInterval = setInterval(() => {
-        pointPosition = {
-          x: Math.floor(Math.random() * GRID_SIZE),
-          y: Math.floor(Math.random() * GRID_SIZE)
-        };
-        
-        initGrid();
-        updateCompass();
-      }, 3000);
-    }
-    
-    // Initialize the game
+    // Initialize app
     function init() {
-      initGrid();
-      updateCompass();
-      startPointMovement();
+      // Check if geolocation is supported
+      if (!navigator.geolocation) {
+        statusEl.textContent = 'Geolocation not supported by your browser';
+        startBtn.disabled = true;
+        return;
+      }
+      
+      // Check if device orientation is supported
+      if (!window.DeviceOrientationEvent) {
+        statusEl.textContent = 'Device orientation not supported by your browser';
+        startBtn.disabled = true;
+        return;
+      }
+      
+      statusEl.textContent = 'Ready to start';
+      
+      // Setup button listeners
+      startBtn.addEventListener('click', startExperience);
+      newPointBtn.addEventListener('click', createNewVirtualPoint);
+      newPointBtn.disabled = true;
+      
+      // Set initial compass needle position
+      updateCompassNeedle(0);
     }
     
-    // Start the game
+    // Start tracking location and orientation
+    function startExperience() {
+      if (isTracking) return;
+      
+      statusEl.textContent = 'Starting...';
+      
+      // Request permission for device orientation (iOS 13+)
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+          .then(permissionState => {
+            if (permissionState === 'granted') {
+              startTracking();
+            } else {
+              statusEl.textContent = 'Permission for device orientation was denied';
+            }
+          })
+          .catch(error => {
+            console.error(error);
+            // Fallback for non-iOS devices
+            startTracking();
+          });
+      } else {
+        // For non-iOS devices
+        startTracking();
+      }
+    }
+    
+    // Start tracking location and orientation
+    function startTracking() {
+      // Start watching user position
+      watchId = navigator.geolocation.watchPosition(
+        handlePositionUpdate,
+        handlePositionError,
+        { 
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 5000
+        }
+      );
+      
+      // Listen for device orientation changes
+      window.addEventListener('deviceorientation', handleOrientation);
+      
+      isTracking = true;
+      startBtn.disabled = true;
+      newPointBtn.disabled = false;
+      statusEl.textContent = 'Tracking started';
+    }
+    
+    // Handle updates to user position
+    function handlePositionUpdate(position) {
+      userPosition = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+      };
+      
+      log(`User position updated: ${userPosition.lat.toFixed(6)}, ${userPosition.lng.toFixed(6)}`);
+      
+      // Create virtual point if it doesn't exist yet
+      if (!virtualPoint) {
+        createNewVirtualPoint();
+      } else {
+        updateDistanceAndDirection();
+      }
+    }
+    
+    // Handle geolocation errors
+    function handlePositionError(error) {
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          statusEl.textContent = 'Location permission denied';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          statusEl.textContent = 'Location information unavailable';
+          break;
+        case error.TIMEOUT:
+          statusEl.textContent = 'Location request timed out';
+          break;
+        case error.UNKNOWN_ERROR:
+          statusEl.textContent = 'An unknown error occurred';
+          break;
+      }
+    }
+    
+    // Handle device orientation updates
+    function handleOrientation(event) {
+      // Get device compass heading (degrees clockwise from north)
+      if (event.webkitCompassHeading) {
+        // iOS compass heading
+        deviceOrientation = event.webkitCompassHeading;
+      } else if (event.alpha !== null) {
+        // Android/other (convert from counter-clockwise to clockwise)
+        deviceOrientation = 360 - event.alpha;
+      }
+      
+      updateCompassNeedle(deviceOrientation);
+      
+      if (virtualPoint) {
+        updatePointingDirection();
+      }
+    }
+    
+    // Create a new virtual point
+    function createNewVirtualPoint() {
+      if (!userPosition) {
+        statusEl.textContent = 'Waiting for your position...';
+        return;
+      }
+      
+      // Create a virtual point nearby (random offset within ~50 meters)
+      // 0.0001 degrees is approximately 10 meters at the equator
+      const randomOffset = () => (Math.random() - 0.5) * 0.001; // ~50m range
+      
+      virtualPoint = {
+        lat: userPosition.lat + randomOffset(),
+        lng: userPosition.lng + randomOffset()
+      };
+      
+      log(`Created virtual point at: ${virtualPoint.lat.toFixed(6)}, ${virtualPoint.lng.toFixed(6)}`);
+      statusEl.textContent = 'Virtual point created!';
+      
+      updateDistanceAndDirection();
+    }
+    
+    // Calculate bearing between user and virtual point
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+      const toRad = value => value * Math.PI / 180;
+      const toDeg = value => value * 180 / Math.PI;
+      
+      const φ1 = toRad(lat1);
+      const φ2 = toRad(lat2);
+      const Δλ = toRad(lon2 - lon1);
+      
+      const y = Math.sin(Δλ) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) -
+                Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+      
+      const θ = Math.atan2(y, x);
+      const bearing = (toDeg(θ) + 360) % 360;
+      
+      return bearing;
+    }
+    
+    // Calculate distance between user and virtual point
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000; // Earth's radius in meters
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+      
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distance = R * c;
+      
+      return distance;
+    }
+    
+    // Update distance and direction to virtual point
+    function updateDistanceAndDirection() {
+      if (!userPosition || !virtualPoint) return;
+      
+      // Calculate bearing and distance
+      const bearing = calculateBearing(
+        userPosition.lat, userPosition.lng,
+        virtualPoint.lat, virtualPoint.lng
+      );
+      
+      distance = calculateDistance(
+        userPosition.lat, userPosition.lng,
+        virtualPoint.lat, virtualPoint.lng
+      );
+      
+      log(`Bearing: ${bearing.toFixed(1)}°, Distance: ${distance.toFixed(1)}m`);
+      
+      // Update distance display
+      distanceEl.textContent = `${Math.round(distance)} meters`;
+      
+      // Update pointing direction
+      pointingAngle = bearing;
+      updatePointingDirection();
+    }
+    
+    // Update the direction of the blue pointer
+    function updatePointingDirection() {
+      // Calculate compass direction (adjusting for device heading)
+      const adjustedAngle = (pointingAngle - deviceOrientation + 360) % 360;
+      pointer.style.transform = `rotate(${adjustedAngle}deg)`;
+    }
+    
+    // Update the compass needle (red/blue) to point north
+    function updateCompassNeedle(heading) {
+      compassNeedle.style.transform = `rotate(${heading}deg)`;
+    }
+    
+    // Start the app
     init();
   </script>
 </body>
