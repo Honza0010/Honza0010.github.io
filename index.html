@@ -1,0 +1,236 @@
+import { useState, useEffect } from 'react';
+import { Compass } from 'lucide-react';
+
+export default function VirtualPointCompass() {
+  const [userPosition, setUserPosition] = useState({ lat: null, lng: null });
+  const [virtualPoint, setVirtualPoint] = useState({ lat: null, lng: null });
+  const [compass, setCompass] = useState(0);
+  const [distance, setDistance] = useState(0);
+  const [heading, setHeading] = useState(0);
+  const [error, setError] = useState('');
+  const [started, setStarted] = useState(false);
+
+  // Start the experience
+  const handleStart = () => {
+    if (!started) {
+      setStarted(true);
+      initializeVirtualPoint();
+      startMovingVirtualPoint();
+    }
+  };
+
+  // Initialize virtual point near user's position
+  const initializeVirtualPoint = () => {
+    if (userPosition.lat && userPosition.lng) {
+      // Create a virtual point slightly offset from the user's current position
+      const initialPoint = {
+        lat: userPosition.lat + 0.0001 * (Math.random() - 0.5),
+        lng: userPosition.lng + 0.0001 * (Math.random() - 0.5)
+      };
+      setVirtualPoint(initialPoint);
+    }
+  };
+
+  // Make the virtual point "fly" around by updating its position periodically
+  const startMovingVirtualPoint = () => {
+    const movementInterval = setInterval(() => {
+      setVirtualPoint(prevPoint => {
+        if (!prevPoint.lat || !prevPoint.lng) return prevPoint;
+        
+        // Make small random movements (scaled to be within apartment-sized distances)
+        // The 0.00001 factor keeps movement small - roughly 1 meter at a time
+        return {
+          lat: prevPoint.lat + 0.00001 * (Math.random() - 0.5),
+          lng: prevPoint.lng + 0.00001 * (Math.random() - 0.5)
+        };
+      });
+    }, 2000); // Update every 2 seconds
+
+    // Clean up interval
+    return () => clearInterval(movementInterval);
+  };
+
+  // Get user's position
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    // Watch position with high accuracy for indoor use
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserPosition({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+        setError('');
+      },
+      (err) => {
+        setError(`Error getting location: ${err.message}`);
+      },
+      { 
+        enableHighAccuracy: true, 
+        maximumAge: 0,
+        timeout: 5000
+      }
+    );
+
+    // Handle device orientation for compass heading
+    const handleOrientation = (event) => {
+      // Use compass heading from device if available
+      if (event.webkitCompassHeading) {
+        // iOS compass heading (degrees clockwise from north)
+        setHeading(event.webkitCompassHeading);
+      } else if (event.alpha !== null) {
+        // Android/other devices (convert from counter-clockwise to clockwise)
+        setHeading(360 - event.alpha);
+      }
+    };
+
+    // Request permission for device orientation (required on iOS)
+    if (typeof DeviceOrientationEvent !== 'undefined' && 
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      // iOS 13+ requires explicit permission
+      DeviceOrientationEvent.requestPermission()
+        .then(permissionState => {
+          if (permissionState === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation);
+          } else {
+            setError('Permission for device orientation was denied');
+          }
+        })
+        .catch(err => {
+          // Handle regular devices or errors
+          window.addEventListener('deviceorientation', handleOrientation);
+        });
+    } else {
+      // Handle regular devices 
+      window.addEventListener('deviceorientation', handleOrientation);
+    }
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      window.removeEventListener('deviceorientation', handleOrientation);
+    };
+  }, []);
+
+  // Calculate bearing and distance when positions change
+  useEffect(() => {
+    if (userPosition.lat && userPosition.lng && virtualPoint.lat && virtualPoint.lng) {
+      // Calculate bearing between user and virtual point
+      const bearing = calculateBearing(
+        userPosition.lat, userPosition.lng,
+        virtualPoint.lat, virtualPoint.lng
+      );
+      
+      // Calculate compass direction (adjusting for device heading)
+      const compassDirection = (bearing - heading + 360) % 360;
+      setCompass(compassDirection);
+      
+      // Calculate distance in meters
+      const calculatedDistance = calculateDistance(
+        userPosition.lat, userPosition.lng,
+        virtualPoint.lat, virtualPoint.lng
+      );
+      setDistance(Math.round(calculatedDistance));
+    }
+  }, [userPosition, virtualPoint, heading]);
+
+  // Calculate bearing between two coordinates (returns degrees from north)
+  function calculateBearing(lat1, lon1, lat2, lon2) {
+    const toRad = value => value * Math.PI / 180;
+    const toDeg = value => value * 180 / Math.PI;
+    
+    const φ1 = toRad(lat1);
+    const φ2 = toRad(lat2);
+    const Δλ = toRad(lon2 - lon1);
+
+    const y = Math.sin(Δλ) * Math.cos(φ2);
+    const x = Math.cos(φ1) * Math.sin(φ2) -
+              Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+    
+    const θ = Math.atan2(y, x);
+    const bearing = (toDeg(θ) + 360) % 360;
+    
+    return bearing;
+  }
+
+  // Calculate distance between two coordinates (returns meters)
+  function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c;
+    
+    return distance;
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+        <h1 className="text-2xl font-bold text-center mb-4">Virtual Point Finder</h1>
+        
+        {!started ? (
+          <div className="text-center">
+            <p className="mb-4">Find the virtual point floating around your apartment!</p>
+            <button 
+              onClick={handleStart}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
+            >
+              Start Experience
+            </button>
+          </div>
+        ) : (
+          <>
+            {error ? (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {error}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center">
+                {/* Compass */}
+                <div className="relative w-64 h-64 mb-6">
+                  <div className="absolute inset-0 bg-gray-200 rounded-full flex items-center justify-center">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                    <div className="absolute top-4 text-sm">N</div>
+                    <div className="absolute right-4 text-sm">E</div>
+                    <div className="absolute bottom-4 text-sm">S</div>
+                    <div className="absolute left-4 text-sm">W</div>
+                  </div>
+                  <div 
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{ transform: `rotate(${compass}deg)` }}
+                  >
+                    <div className="w-1 h-32 bg-gradient-to-t from-blue-600 to-transparent"></div>
+                    <Compass size={40} className="absolute text-blue-600" />
+                  </div>
+                </div>
+                
+                {/* Distance indicator */}
+                <div className="text-center mb-4">
+                  <p className="text-lg">Distance: <span className="font-bold">{distance}</span> meters</p>
+                </div>
+                
+                {/* Debug info (can be removed in production) */}
+                <div className="mt-4 text-xs text-gray-500">
+                  <p>Your position: {userPosition.lat?.toFixed(6)}, {userPosition.lng?.toFixed(6)}</p>
+                  <p>Virtual point: {virtualPoint.lat?.toFixed(6)}, {virtualPoint.lng?.toFixed(6)}</p>
+                  <p>Device heading: {heading.toFixed(1)}°</p>
+                  <p>Compass direction: {compass.toFixed(1)}°</p>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
