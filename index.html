@@ -1,235 +1,201 @@
 import { useState, useEffect } from 'react';
-import { Compass } from 'lucide-react';
 
-export default function VirtualPointCompass() {
-  const [userPosition, setUserPosition] = useState({ lat: null, lng: null });
-  const [virtualPoint, setVirtualPoint] = useState({ lat: null, lng: null });
-  const [compass, setCompass] = useState(0);
-  const [distance, setDistance] = useState(0);
-  const [heading, setHeading] = useState(0);
-  const [error, setError] = useState('');
-  const [started, setStarted] = useState(false);
-
-  // Start the experience
-  const handleStart = () => {
-    if (!started) {
-      setStarted(true);
-      initializeVirtualPoint();
-      startMovingVirtualPoint();
-    }
-  };
-
-  // Initialize virtual point near user's position
-  const initializeVirtualPoint = () => {
-    if (userPosition.lat && userPosition.lng) {
-      // Create a virtual point slightly offset from the user's current position
-      const initialPoint = {
-        lat: userPosition.lat + 0.0001 * (Math.random() - 0.5),
-        lng: userPosition.lng + 0.0001 * (Math.random() - 0.5)
-      };
-      setVirtualPoint(initialPoint);
-    }
-  };
-
-  // Make the virtual point "fly" around by updating its position periodically
-  const startMovingVirtualPoint = () => {
-    const movementInterval = setInterval(() => {
-      setVirtualPoint(prevPoint => {
-        if (!prevPoint.lat || !prevPoint.lng) return prevPoint;
-        
-        // Make small random movements (scaled to be within apartment-sized distances)
-        // The 0.00001 factor keeps movement small - roughly 1 meter at a time
-        return {
-          lat: prevPoint.lat + 0.00001 * (Math.random() - 0.5),
-          lng: prevPoint.lng + 0.00001 * (Math.random() - 0.5)
-        };
-      });
-    }, 2000); // Update every 2 seconds
-
-    // Clean up interval
-    return () => clearInterval(movementInterval);
-  };
-
-  // Get user's position
+export default function SimpleVirtualPointFinder() {
+  // Grid size for our virtual space
+  const GRID_SIZE = 300;
+  const CELL_SIZE = 30;
+  
+  // User and point positions
+  const [userPosition, setUserPosition] = useState({ x: 5, y: 5 });
+  const [pointPosition, setPointPosition] = useState({ x: 8, y: 3 });
+  const [direction, setDirection] = useState('');
+  
+  // Move the user position with arrow keys
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser');
-      return;
-    }
-
-    // Watch position with high accuracy for indoor use
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        setUserPosition({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-        setError('');
-      },
-      (err) => {
-        setError(`Error getting location: ${err.message}`);
-      },
-      { 
-        enableHighAccuracy: true, 
-        maximumAge: 0,
-        timeout: 5000
-      }
-    );
-
-    // Handle device orientation for compass heading
-    const handleOrientation = (event) => {
-      // Use compass heading from device if available
-      if (event.webkitCompassHeading) {
-        // iOS compass heading (degrees clockwise from north)
-        setHeading(event.webkitCompassHeading);
-      } else if (event.alpha !== null) {
-        // Android/other devices (convert from counter-clockwise to clockwise)
-        setHeading(360 - event.alpha);
+    const handleKeyPress = (e) => {
+      switch(e.key) {
+        case 'ArrowUp':
+          setUserPosition(prev => ({ ...prev, y: Math.max(0, prev.y - 1) }));
+          break;
+        case 'ArrowDown':
+          setUserPosition(prev => ({ ...prev, y: Math.min(9, prev.y + 1) }));
+          break;
+        case 'ArrowLeft':
+          setUserPosition(prev => ({ ...prev, x: Math.max(0, prev.x - 1) }));
+          break;
+        case 'ArrowRight':
+          setUserPosition(prev => ({ ...prev, x: Math.min(9, prev.x + 1) }));
+          break;
+        default:
+          break;
       }
     };
-
-    // Request permission for device orientation (required on iOS)
-    if (typeof DeviceOrientationEvent !== 'undefined' && 
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // iOS 13+ requires explicit permission
-      DeviceOrientationEvent.requestPermission()
-        .then(permissionState => {
-          if (permissionState === 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation);
-          } else {
-            setError('Permission for device orientation was denied');
-          }
-        })
-        .catch(err => {
-          // Handle regular devices or errors
-          window.addEventListener('deviceorientation', handleOrientation);
-        });
-    } else {
-      // Handle regular devices 
-      window.addEventListener('deviceorientation', handleOrientation);
-    }
-
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-      window.removeEventListener('deviceorientation', handleOrientation);
-    };
+    
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
-
-  // Calculate bearing and distance when positions change
+  
+  // Move the virtual point randomly every few seconds
   useEffect(() => {
-    if (userPosition.lat && userPosition.lng && virtualPoint.lat && virtualPoint.lng) {
-      // Calculate bearing between user and virtual point
-      const bearing = calculateBearing(
-        userPosition.lat, userPosition.lng,
-        virtualPoint.lat, virtualPoint.lng
-      );
-      
-      // Calculate compass direction (adjusting for device heading)
-      const compassDirection = (bearing - heading + 360) % 360;
-      setCompass(compassDirection);
-      
-      // Calculate distance in meters
-      const calculatedDistance = calculateDistance(
-        userPosition.lat, userPosition.lng,
-        virtualPoint.lat, virtualPoint.lng
-      );
-      setDistance(Math.round(calculatedDistance));
+    const intervalId = setInterval(() => {
+      setPointPosition({
+        x: Math.floor(Math.random() * 10),
+        y: Math.floor(Math.random() * 10)
+      });
+    }, 3000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
+  
+  // Calculate direction to point whenever positions change
+  useEffect(() => {
+    // Calculate direction from user to point
+    const dx = pointPosition.x - userPosition.x;
+    const dy = pointPosition.y - userPosition.y;
+    
+    // Determine primary direction (N, S, E, W)
+    let newDirection = '';
+    
+    if (Math.abs(dy) > Math.abs(dx)) {
+      // Vertical movement is stronger
+      newDirection = dy < 0 ? 'North' : 'South';
+      if (Math.abs(dx) > 0.3 * Math.abs(dy)) {
+        // Add secondary direction
+        newDirection += dx < 0 ? 'west' : 'east';
+      }
+    } else {
+      // Horizontal movement is stronger
+      newDirection = dx < 0 ? 'West' : 'East';
+      if (Math.abs(dy) > 0.3 * Math.abs(dx)) {
+        // Add secondary direction
+        newDirection = (dy < 0 ? 'North' : 'South') + newDirection.toLowerCase();
+      }
     }
-  }, [userPosition, virtualPoint, heading]);
-
-  // Calculate bearing between two coordinates (returns degrees from north)
-  function calculateBearing(lat1, lon1, lat2, lon2) {
-    const toRad = value => value * Math.PI / 180;
-    const toDeg = value => value * 180 / Math.PI;
     
-    const φ1 = toRad(lat1);
-    const φ2 = toRad(lat2);
-    const Δλ = toRad(lon2 - lon1);
-
-    const y = Math.sin(Δλ) * Math.cos(φ2);
-    const x = Math.cos(φ1) * Math.sin(φ2) -
-              Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+    // If we're at the same position
+    if (dx === 0 && dy === 0) {
+      newDirection = 'You found it!';
+    }
     
-    const θ = Math.atan2(y, x);
-    const bearing = (toDeg(θ) + 360) % 360;
+    setDirection(newDirection);
+  }, [userPosition, pointPosition]);
+  
+  // Draw the grid with the user and point positions
+  const renderGrid = () => {
+    const grid = [];
     
-    return bearing;
-  }
-
-  // Calculate distance between two coordinates (returns meters)
-  function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // Earth's radius in meters
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-    
-    return distance;
-  }
-
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-4">Virtual Point Finder</h1>
+    for (let y = 0; y < 10; y++) {
+      const row = [];
+      for (let x = 0; x < 10; x++) {
+        const isUser = userPosition.x === x && userPosition.y === y;
+        const isPoint = pointPosition.x === x && pointPosition.y === y;
         
-        {!started ? (
-          <div className="text-center">
-            <p className="mb-4">Find the virtual point floating around your apartment!</p>
-            <button 
-              onClick={handleStart}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
-            >
-              Start Experience
-            </button>
+        let cellContent = '·';
+        let cellClass = 'flex items-center justify-center bg-gray-100';
+        
+        if (isUser && isPoint) {
+          cellContent = '★';
+          cellClass = 'flex items-center justify-center bg-purple-300 font-bold';
+        } else if (isUser) {
+          cellContent = '⬤';
+          cellClass = 'flex items-center justify-center bg-blue-300';
+        } else if (isPoint) {
+          cellContent = '✦';
+          cellClass = 'flex items-center justify-center bg-yellow-200';
+        }
+        
+        row.push(
+          <div 
+            key={`${x}-${y}`} 
+            className={`${cellClass} w-8 h-8 border border-gray-300`}
+          >
+            {cellContent}
           </div>
-        ) : (
-          <>
-            {error ? (
-              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                {error}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center">
-                {/* Compass */}
-                <div className="relative w-64 h-64 mb-6">
-                  <div className="absolute inset-0 bg-gray-200 rounded-full flex items-center justify-center">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                    <div className="absolute top-4 text-sm">N</div>
-                    <div className="absolute right-4 text-sm">E</div>
-                    <div className="absolute bottom-4 text-sm">S</div>
-                    <div className="absolute left-4 text-sm">W</div>
-                  </div>
-                  <div 
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{ transform: `rotate(${compass}deg)` }}
-                  >
-                    <div className="w-1 h-32 bg-gradient-to-t from-blue-600 to-transparent"></div>
-                    <Compass size={40} className="absolute text-blue-600" />
-                  </div>
-                </div>
-                
-                {/* Distance indicator */}
-                <div className="text-center mb-4">
-                  <p className="text-lg">Distance: <span className="font-bold">{distance}</span> meters</p>
-                </div>
-                
-                {/* Debug info (can be removed in production) */}
-                <div className="mt-4 text-xs text-gray-500">
-                  <p>Your position: {userPosition.lat?.toFixed(6)}, {userPosition.lng?.toFixed(6)}</p>
-                  <p>Virtual point: {virtualPoint.lat?.toFixed(6)}, {virtualPoint.lng?.toFixed(6)}</p>
-                  <p>Device heading: {heading.toFixed(1)}°</p>
-                  <p>Compass direction: {compass.toFixed(1)}°</p>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        );
+      }
+      grid.push(
+        <div key={y} className="flex">
+          {row}
+        </div>
+      );
+    }
+    
+    return grid;
+  };
+
+  // Create buttons for mobile users
+  const handleButtonPress = (direction) => {
+    switch(direction) {
+      case 'up':
+        setUserPosition(prev => ({ ...prev, y: Math.max(0, prev.y - 1) }));
+        break;
+      case 'down':
+        setUserPosition(prev => ({ ...prev, y: Math.min(9, prev.y + 1) }));
+        break;
+      case 'left':
+        setUserPosition(prev => ({ ...prev, x: Math.max(0, prev.x - 1) }));
+        break;
+      case 'right':
+        setUserPosition(prev => ({ ...prev, x: Math.min(9, prev.x + 1) }));
+        break;
+      default:
+        break;
+    }
+  };
+  
+  return (
+    <div className="flex flex-col items-center justify-center p-4 max-w-md mx-auto">
+      <h1 className="text-xl font-bold mb-2">Simple Virtual Point Finder</h1>
+      <p className="text-sm mb-4">Move with arrow keys or buttons to find the virtual point</p>
+      
+      <div className="mb-4">
+        <div className="text-center font-medium mb-2">
+          Compass: <span className="text-blue-600">{direction}</span>
+        </div>
+        
+        <div className="border border-gray-400 p-1 bg-gray-50">
+          {renderGrid()}
+        </div>
+        
+        <div className="text-xs text-gray-600 mt-2">
+          <div>⬤ = You</div>
+          <div>✦ = Virtual point</div>
+        </div>
+      </div>
+      
+      {/* Controls for mobile users */}
+      <div className="grid grid-cols-3 gap-1 w-32 mt-4">
+        <div></div>
+        <button 
+          onClick={() => handleButtonPress('up')}
+          className="bg-gray-200 p-2 rounded text-center flex items-center justify-center"
+        >
+          ▲
+        </button>
+        <div></div>
+        
+        <button 
+          onClick={() => handleButtonPress('left')}
+          className="bg-gray-200 p-2 rounded text-center flex items-center justify-center"
+        >
+          ◄
+        </button>
+        <div></div>
+        <button 
+          onClick={() => handleButtonPress('right')}
+          className="bg-gray-200 p-2 rounded text-center flex items-center justify-center"
+        >
+          ►
+        </button>
+        
+        <div></div>
+        <button 
+          onClick={() => handleButtonPress('down')}
+          className="bg-gray-200 p-2 rounded text-center flex items-center justify-center"
+        >
+          ▼
+        </button>
+        <div></div>
       </div>
     </div>
   );
